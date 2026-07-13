@@ -1,13 +1,14 @@
-const CACHE_NAME = 'alliance-journaliere-web-pwa-v60';
+const CACHE_NAME = 'alliance-journaliere-web-pwa-v61';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=60',
-  './app.js?v=60',
+  './styles.css?v=61',
+  './app.js?v=61',
   './assets/logos-de-visa-et-mastercard-102631953.webp',
   './assets/wave-logo.jpeg',
   './assets/orange-money-logo.png',
   './assets/moov-money-logo.png',
+  './assets/mtn-logo.png',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

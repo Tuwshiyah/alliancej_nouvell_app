@@ -304,7 +304,7 @@ function providerLogo(label) {
   const value = normalize(label);
   if (value.includes('orange')) return './assets/orange-money-logo.png';
   if (value.includes('wave')) return './assets/wave-logo.jpeg';
-  if (value.includes('mtn')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/MTN_Logo.svg/250px-MTN_Logo.svg.png';
+  if (value.includes('mtn')) return './assets/mtn-logo.png';
   if (value.includes('moov')) return './assets/moov-money-logo.png';
   if (value.includes('ecobank')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Ecobank_Logo.svg/500px-Ecobank_Logo.svg.png';
   if (value.includes('tresor')) return 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a7/7f/cd/a77fcda6-07d0-4767-d581-48c12be4768f/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg';
@@ -437,24 +437,69 @@ function suiviStatus(status) {
   return { color: '#5A5F7D', bg: '#E6E8F2', label: 'A venir', cellBg: '#FFFFFF', cellFg: '#8E92AB' };
 }
 
-async function loadProviders(force = false) {
-  if ((state.providers.length || state.providersLoading) && !force) return;
+const PROVIDERS_CACHE_KEY = 'aj-providers-cache-v1';
+const PROVIDERS_CACHE_TTL_MS = 10 * 60 * 1000;
 
+function readProvidersCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PROVIDERS_CACHE_KEY) || 'null');
+    return parsed && Array.isArray(parsed.providers) && parsed.providers.length && parsed.savedAt
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProvidersCache(providers) {
+  try {
+    localStorage.setItem(PROVIDERS_CACHE_KEY, JSON.stringify({ providers, savedAt: Date.now() }));
+  } catch {
+    // Stockage indisponible (navigation privee) : on garde juste l'etat memoire.
+  }
+}
+
+async function loadProviders(force = false) {
+  if (state.providersLoading) return;
+  if (state.providers.length && !force) return;
+
+  // Affichage instantane depuis le cache local ; rafraichissement en
+  // arriere-plan seulement si le cache date de plus de 10 minutes.
+  const cached = force ? null : readProvidersCache();
+
+  if (cached) {
+    state.providers = cached.providers;
+
+    if (Date.now() - cached.savedAt < PROVIDERS_CACHE_TTL_MS) {
+      render();
+      return;
+    }
+  }
+
+  const showSpinner = !state.providers.length;
   state.providersLoading = true;
   state.providersError = '';
-  render();
+  if (showSpinner) render();
 
   try {
     const payload = await getFunction('payment-providers', '?country=CI&currency=XOF');
-    state.providers = sortProviders((payload.providers || []).filter(shouldShowProvider));
+    const nextProviders = sortProviders((payload.providers || []).filter(shouldShowProvider));
+    const changed = JSON.stringify(nextProviders) !== JSON.stringify(state.providers);
+    state.providers = nextProviders;
+    writeProvidersCache(nextProviders);
     state.selectedProviderId = state.providers.some((provider) => String(provider.service_id) === String(state.selectedProviderId))
       ? state.selectedProviderId
       : null;
-  } catch (error) {
-    state.providersError = error instanceof Error ? error.message : 'Impossible de charger les moyens de paiement.';
-  } finally {
     state.providersLoading = false;
-    render();
+    if (changed || showSpinner) render();
+  } catch (error) {
+    state.providersLoading = false;
+
+    // Une erreur de rafraichissement ne doit pas masquer la liste deja affichee.
+    if (!state.providers.length) {
+      state.providersError = error instanceof Error ? error.message : 'Impossible de charger les moyens de paiement.';
+      render();
+    }
   }
 }
 
@@ -1030,7 +1075,7 @@ function renderProvider(provider) {
     <article class="provider-card ${selected ? 'is-selected' : ''}" data-provider-id="${escapeHtml(provider.service_id)}">
       <button class="provider-main" data-provider-pick="${escapeHtml(provider.service_id)}" type="button">
         <span class="provider-logo ${logoClass}" style="background:${logoBackground};">
-          ${logo ? `<img src="${escapeHtml(logo)}" alt="" loading="lazy" />` : providerShort(provider.label)}
+          ${logo ? `<img src="${escapeHtml(logo)}" alt="" loading="lazy" decoding="async" />` : providerShort(provider.label)}
         </span>
         <span class="provider-text">
           <strong class="provider-name">${escapeHtml(providerDisplayName(provider))}</strong>
@@ -1778,6 +1823,69 @@ function selectedProvider(id) {
   return state.providers.find((provider) => String(provider.service_id) === String(id));
 }
 
+// Met a jour la selection sans reconstruire tout le DOM : les logos ne sont
+// pas recrees, donc pas de clignotement, et la reponse est instantanee.
+function applyProviderSelection(id) {
+  state.selectedProviderId = id;
+  state.paymentError = '';
+
+  const cards = document.querySelectorAll('.provider-card');
+
+  if (!cards.length) {
+    render();
+    return;
+  }
+
+  cards.forEach((cardElement) => {
+    const cardId = cardElement.dataset.providerId;
+    const selected = String(cardId) === String(id);
+    cardElement.classList.toggle('is-selected', selected);
+
+    const extra = cardElement.querySelector('.provider-extra');
+    if (extra) extra.remove();
+
+    if (selected) {
+      const provider = selectedProvider(cardId);
+      if (provider) {
+        cardElement.insertAdjacentHTML(
+          'beforeend',
+          renderProviderExtra(provider, providerRequiresPhone(provider), isCardProvider(provider)),
+        );
+      }
+    }
+  });
+}
+
+// Affiche une erreur dans le bloc du moyen selectionne sans re-render global,
+// pour ne pas effacer ce que l'utilisateur a deja saisi.
+function showPaymentError(provider, message) {
+  state.paymentError = message;
+
+  const extra = document.querySelector(`.provider-card[data-provider-id="${provider.service_id}"] .provider-extra`);
+
+  if (!extra) {
+    render();
+    return;
+  }
+
+  let errorElement = extra.querySelector('.error');
+
+  if (!errorElement) {
+    errorElement = document.createElement('div');
+    errorElement.className = 'error';
+    extra.insertBefore(errorElement, extra.querySelector('button'));
+  }
+
+  errorElement.textContent = message;
+}
+
+function setPayButtonLoading(provider, loading) {
+  const button = document.querySelector(`[data-pay-provider="${provider.service_id}"]`);
+  if (!button) return;
+  button.disabled = loading;
+  button.textContent = loading ? 'Création du lien...' : 'Continuer →';
+}
+
 async function createPayment(providerId) {
   const provider = selectedProvider(providerId);
   if (!provider) return;
@@ -1789,20 +1897,18 @@ async function createPayment(providerId) {
   const omOtp = String(otpInput?.value || '').trim();
 
   if (providerRequiresPhone(provider) && !phone) {
-    state.paymentError = providerPhoneLabel(provider.label);
-    render();
+    showPaymentError(provider, providerPhoneLabel(provider.label));
     return;
   }
 
   if (normalize(provider.label).includes('orange') && omOtp.length < 4) {
-    state.paymentError = 'Le code OTP Orange est obligatoire. Composez #144*82# pour l\'obtenir.';
-    render();
+    showPaymentError(provider, 'Le code OTP Orange est obligatoire. Composez #144*82# pour l\'obtenir.');
     return;
   }
 
   state.paymentLoading = true;
   state.paymentError = '';
-  render();
+  setPayButtonLoading(provider, true);
 
   try {
     const payment = await postFunction('create-payment', {
@@ -1846,9 +1952,9 @@ async function createPayment(providerId) {
     startStatusPolling(payment.reference);
     checkPayment(payment.reference);
   } catch (error) {
-    state.paymentError = error instanceof Error ? error.message : 'Impossible de creer le paiement.';
     state.paymentLoading = false;
-    render();
+    setPayButtonLoading(provider, false);
+    showPaymentError(provider, error instanceof Error ? error.message : 'Impossible de creer le paiement.');
   }
 }
 
@@ -2112,9 +2218,7 @@ app.addEventListener('click', (event) => {
   }
 
   if (target.dataset.providerPick) {
-    state.selectedProviderId = target.dataset.providerPick;
-    state.paymentError = '';
-    render();
+    applyProviderSelection(target.dataset.providerPick);
     return;
   }
 

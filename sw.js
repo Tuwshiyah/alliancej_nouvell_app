@@ -1,9 +1,9 @@
-const CACHE_NAME = 'alliance-journaliere-web-pwa-v59';
+const CACHE_NAME = 'alliance-journaliere-web-pwa-v60';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=59',
-  './app.js?v=59',
+  './styles.css?v=60',
+  './app.js?v=60',
   './assets/logos-de-visa-et-mastercard-102631953.webp',
   './assets/wave-logo.jpeg',
   './assets/orange-money-logo.png',

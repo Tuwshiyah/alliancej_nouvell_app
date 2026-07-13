@@ -268,9 +268,9 @@ function isCardProvider(provider) {
 }
 
 function providerRequiresPhone(provider) {
-  // L'API directe PaySecureHub exige un msisdn pour tous les moyens,
-  // y compris la carte (numero de contact du client).
-  return !!provider;
+  // Le msisdn ne concerne que le mobile money. La carte passe par le
+  // formulaire heberge du marchand, sans numero de telephone.
+  return !!provider && !isCardProvider(provider);
 }
 
 function providerKind(provider) {

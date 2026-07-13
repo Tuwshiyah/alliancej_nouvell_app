@@ -1,9 +1,9 @@
-const CACHE_NAME = 'alliance-journaliere-web-pwa-v57';
+const CACHE_NAME = 'alliance-journaliere-web-pwa-v58';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=57',
-  './app.js?v=57',
+  './styles.css?v=58',
+  './app.js?v=58',
   './assets/logos-de-visa-et-mastercard-102631953.webp',
   './assets/wave-logo.jpeg',
   './assets/orange-money-logo.png',
@@ -56,12 +56,22 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin === self.location.origin) {
+    // Cache d'abord pour la rapidite, mais rafraichissement en arriere-plan
+    // pour que les mises a jour arrivent au plus tard au chargement suivant.
     event.respondWith(
-      caches.match(request).then((cached) => cached ?? fetch(request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        return response;
-      })),
+      caches.match(request).then((cached) => {
+        const refresh = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          })
+          .catch(() => cached);
+
+        return cached ?? refresh;
+      }),
     );
   }
 });

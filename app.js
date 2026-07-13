@@ -285,7 +285,8 @@ function providerDisplayName(provider) {
 
 function shouldShowProvider(provider) {
   const value = normalize(`${provider?.label ?? ''} ${provider?.method ?? ''}`);
-  return !value.includes('ecobank') && !value.includes('tresor');
+  // Cartes bancaires retirees des moyens proposes (mobile money uniquement).
+  return !value.includes('ecobank') && !value.includes('tresor') && !isCardProvider(provider);
 }
 
 function providerPhoneLabel(label) {
@@ -468,10 +469,12 @@ async function loadProviders(force = false) {
   const cached = force ? null : readProvidersCache();
 
   if (cached) {
-    state.providers = cached.providers;
+    // Re-filtre le cache : un moyen retire (ex. carte) disparait aussi
+    // pour les visiteurs qui ont encore l'ancienne liste en cache.
+    state.providers = sortProviders(cached.providers.filter(shouldShowProvider));
+    render();
 
     if (Date.now() - cached.savedAt < PROVIDERS_CACHE_TTL_MS) {
-      render();
       return;
     }
   }
@@ -966,7 +969,7 @@ function renderPaymentMethod() {
             <span class="payment-type-icon is-online">${uiIcon('smartphone')}</span>
             <span class="payment-type-text">
               <strong>En ligne</strong>
-              <span>Mobile Money, Visa & Master Card</span>
+              <span>Wave, Orange, MTN, Moov</span>
             </span>
             <span class="payment-type-arrow">›</span>
           </button>

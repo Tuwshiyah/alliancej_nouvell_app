@@ -1045,45 +1045,30 @@ function renderProvider(provider) {
 
 function renderProviderExtra(provider, requiresPhone, card) {
   const isOrange = normalize(provider.label).includes('orange');
-
-  if (card) {
-    return `
-      <div class="provider-extra">
-        <p class="card-notice-text">Les informations de carte seront saisies sur la page sécurisée PaySecureHub.</p>
-        ${state.paymentError ? `<div class="error">${escapeHtml(state.paymentError)}</div>` : ''}
-        <button class="primary-button" data-pay-provider="${escapeHtml(provider.service_id)}" type="button" ${state.paymentLoading ? 'disabled' : ''}>
-          ${state.paymentLoading ? 'Création du lien...' : 'Continuer →'}
-        </button>
+  const phoneField = requiresPhone ? `
+    <div class="field">
+      <label for="provider-phone-${escapeHtml(provider.service_id)}">${escapeHtml(providerPhoneLabel(provider.label))}</label>
+      <div class="phone-card">
+        <span class="phone-prefix">+225</span>
+        <input id="provider-phone-${escapeHtml(provider.service_id)}" data-provider-phone inputmode="tel" autocomplete="tel" placeholder="0700000000" />
       </div>
-    `;
-  }
-
-  if (requiresPhone) {
-    return `
-      <div class="provider-extra">
-        <div class="field">
-          <label for="provider-phone-${escapeHtml(provider.service_id)}">${escapeHtml(providerPhoneLabel(provider.label))}</label>
-          <div class="phone-card">
-            <span class="phone-prefix">+225</span>
-            <input id="provider-phone-${escapeHtml(provider.service_id)}" data-provider-phone inputmode="tel" autocomplete="tel" placeholder="0700000000" />
-          </div>
-        </div>
-        ${isOrange ? `
-          <div class="field">
-            <label for="orange-otp-${escapeHtml(provider.service_id)}">Code OTP Orange (obligatoire)</label>
-            <input id="orange-otp-${escapeHtml(provider.service_id)}" data-orange-otp inputmode="numeric" autocomplete="one-time-code" placeholder="Composez #144*82# pour l'obtenir" />
-          </div>
-        ` : ''}
-        ${state.paymentError ? `<div class="error">${escapeHtml(state.paymentError)}</div>` : ''}
-        <button class="primary-button" data-pay-provider="${escapeHtml(provider.service_id)}" type="button" ${state.paymentLoading ? 'disabled' : ''}>
-          ${state.paymentLoading ? 'Création du lien...' : 'Continuer →'}
-        </button>
-      </div>
-    `;
-  }
+    </div>
+  ` : '';
+  const otpField = isOrange ? `
+    <div class="field">
+      <label for="orange-otp-${escapeHtml(provider.service_id)}">Code OTP Orange (obligatoire)</label>
+      <input id="orange-otp-${escapeHtml(provider.service_id)}" data-orange-otp inputmode="numeric" autocomplete="one-time-code" placeholder="Composez #144*82# pour l'obtenir" />
+    </div>
+  ` : '';
+  const cardNotice = card
+    ? '<p class="card-notice-text">Les informations de carte seront saisies sur la page sécurisée PaySecureHub.</p>'
+    : '';
 
   return `
     <div class="provider-extra">
+      ${phoneField}
+      ${otpField}
+      ${cardNotice}
       ${state.paymentError ? `<div class="error">${escapeHtml(state.paymentError)}</div>` : ''}
       <button class="primary-button" data-pay-provider="${escapeHtml(provider.service_id)}" type="button" ${state.paymentLoading ? 'disabled' : ''}>
         ${state.paymentLoading ? 'Création du lien...' : 'Continuer →'}
